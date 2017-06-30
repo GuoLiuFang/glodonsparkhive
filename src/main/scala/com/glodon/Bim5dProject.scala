@@ -1,0 +1,184 @@
+package com.glodon
+
+import com.glodon.config.{Config, Constants}
+import java.sql._
+
+import org.apache.commons.codec.digest.DigestUtils
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.{SparkConf, SparkContext}
+
+import scala.sys.process._
+import scala.collection.mutable.ListBuffer
+
+case class BimProject(var key: String, tmday: String, pcode: String, projectid: String, var prjname: String, dognum: String, gid: String, hardwareid: String, fncode: String, var fnname: String, var count: Int = 0, trigertime: String) {
+  key = tmday + pcode + projectid + dognum + gid + hardwareid + fncode
+  key = java.security.MessageDigest.getInstance("MD5").digest(key.getBytes()).map(0xFF & _).map {
+    "%02x".format(_)
+  }.foldLeft("") {
+    _ + _
+  }
+}
+
+case class BimUser(var key: String, tmday: String, pcode: String, dognum: String, gid: String, hardwareid: String, fncode: String, var fnname: String, var count: Int = 0, trigertime: String) {
+  key = tmday + pcode + dognum + gid + hardwareid + fncode
+  key = DigestUtils.md5Hex(key)
+}
+
+object Bim5dProject {
+
+  val conf = new SparkConf().setAppName("project-from-action")
+  implicit val sc = new SparkContext(conf)
+  implicit val sqlContext = new SQLContext(sc)
+
+  import sqlContext.implicits._
+
+  val parquet_userlog_path = "/glodon/layer2_wide_table/parquet_userlog"
+  val bim5d_project_path = "/glodon/apps/bim5d_project/project"
+  val bim5d_project_tmp_path = "/glodon/apps/bim5d_project/tmp"
+
+  def main(args: scala.Array[String]) {
+
+    var (batchStart, batchEnd, run) = (20170101, 20170101, "all")
+    if (args != null && args.length == 2) {
+      batchStart = args(0).toInt
+      batchEnd = args(1).toInt
+    }
+    if (args != null && args.length == 3) {
+      batchStart = args(0).toInt
+      batchEnd = args(1).toInt
+      run = args(2).toString
+    }
+    if (batchStart == 0 && batchEnd == 0) {
+      batchStart = Config.cf.endDate
+      batchEnd = Config.cf.stopMonthDay
+    }
+    println(s"date:[${batchStart} , ${batchEnd}]\n")
+    var baseDf = sqlContext.read.load(parquet_userlog_path).where(s"mday >= '${batchStart}' and mday <= '${batchEnd}'").
+      select("mday", "pcode", "projectid", "prjname", "dognum", "gid", "hardwareid", "fncode", "fnname", "trigertime").
+      where("pcode in ('11036','-103000','-103001')").repartition(200)
+    //11036 -103000 -103001
+    val dayDf = baseDf.map(x => {
+      val mday = x.getAs[Int]("mday")
+      val pcode = x.getAs[String]("pcode")
+      val projectid = x.getAs[String]("projectid")
+      val prjname = x.getAs[String]("prjname")
+      val dognum = x.getAs[String]("dognum")
+      val gid = x.getAs[String]("gid")
+      val hardwareid = x.getAs[String]("hardwareid")
+      val fncode = x.getAs[Int]("fncode").toString()
+      val fnname = x.getAs[String]("fnname")
+      var trigertime = x.getAs[String]("trigertime")
+      var tmday = "20850101"
+      if (trigertime != null && trigertime.length() > 0) {
+        trigertime = trigertime.replaceAll("年", "").replaceAll("月", "").replaceAll("日", "")
+        tmday = trigertime.substring(0, 4) + trigertime.substring(5, 7) + trigertime.substring(8, 10)
+      }
+      val bimProject = BimProject("N/A", tmday, pcode, projectid, prjname, dognum, gid, hardwareid, fncode, fnname, 1, trigertime)
+      (bimProject.key, bimProject)
+    }).reduceByKey((r1, r2) => {
+      if (r1.trigertime < r2.trigertime) {
+        r1.prjname = if (r2.prjname != "N/A") r2.prjname else r1.prjname
+        r1.fnname = if (r2.fnname != "N/A") r2.fnname else r1.fnname
+      } else {
+        r1.prjname = if (r1.prjname == "N/A") r2.prjname else r1.prjname
+        r1.fnname = if (r1.fnname == "N/A") r2.fnname else r1.fnname
+      }
+      r1.count = r1.count + r2.count
+      r1
+    }, 200).map(x => x._2).toDF()
+    dayDf.persist()
+    val tmdays = dayDf.select("tmday").distinct().map(_.getAs[String]("tmday")).cache().collect()
+    val historyDf = sqlContext.read.load(bim5d_project_path).where(s"""tmday in ('${tmdays.mkString("','")}')""").
+      withColumnRenamed("key", "h_key").
+      withColumnRenamed("tmday", "h_tmday").
+      withColumnRenamed("pcode", "h_pcode").
+      withColumnRenamed("projectid", "h_projectid").
+      withColumnRenamed("prjname", "h_prjname").
+      withColumnRenamed("dognum", "h_dognum").
+      withColumnRenamed("gid", "h_gid").
+      withColumnRenamed("hardwareid", "h_hardwareid").
+      withColumnRenamed("fncode", "h_fncode").
+      withColumnRenamed("fnname", "h_fnname").
+      withColumnRenamed("count", "h_count").
+      withColumnRenamed("trigertime", "h_trigertime")
+
+    val saveDf = dayDf.join(historyDf, dayDf("key") === historyDf("h_key"), "full").map(x => {
+      var (key, h_key) = (x.getAs[String]("key"), x.getAs[String]("h_key"))
+      var tmday = x.getAs[String]("tmday")
+      var pcode = x.getAs[String]("pcode")
+      var projectid = x.getAs[String]("projectid")
+      var prjname = x.getAs[String]("prjname")
+      var dognum = x.getAs[String]("dognum")
+      var gid = x.getAs[String]("gid")
+      var hardwareid = x.getAs[String]("hardwareid")
+      var fncode = x.getAs[String]("fncode")
+      var fnname = x.getAs[String]("fnname")
+      var count = x.getAs[Int]("count")
+      var trigertime = x.getAs[String]("trigertime")
+      var h_tmday = x.getAs[Int]("h_tmday")
+      var h_pcode = x.getAs[String]("h_pcode")
+      var h_projectid = x.getAs[String]("h_projectid")
+      var h_prjname = x.getAs[String]("h_prjname")
+      var h_dognum = x.getAs[String]("h_dognum")
+      var h_gid = x.getAs[String]("h_gid")
+      var h_hardwareid = x.getAs[String]("h_hardwareid")
+      var h_fncode = x.getAs[String]("h_fncode")
+      var h_fnname = x.getAs[String]("h_fnname")
+      var h_count = x.getAs[Int]("h_count")
+      var h_trigertime = x.getAs[String]("h_trigertime")
+      if (key != null && h_key != null) {
+        if (trigertime < h_trigertime) {
+          tmday = h_tmday.toString()
+          pcode = h_pcode
+          projectid = h_projectid
+          prjname = h_prjname
+          dognum = h_dognum
+          gid = h_gid
+          hardwareid = h_hardwareid
+          fncode = h_fncode
+          fnname = h_fnname
+          trigertime = h_fnname
+        }
+        count = count + h_count
+      }
+      if (key == null && h_key != null) {
+        key = h_key
+        tmday = h_tmday.toString()
+        pcode = h_pcode
+        projectid = h_projectid
+        prjname = h_prjname
+        dognum = h_dognum
+        gid = h_gid
+        hardwareid = h_hardwareid
+        fncode = h_fncode
+        fnname = h_fnname
+        count = h_count
+        trigertime = h_fnname
+      }
+      var trigertimeMday = if (tmday != null) tmday.toString() else "20850101"
+      BimProject(key, trigertimeMday, pcode, projectid, prjname, dognum, gid, hardwareid, fncode, fnname, count, trigertime)
+    }).toDF()
+    saveDf.persist()
+    saveDf.repartition(1).write.mode("overwrite").partitionBy("tmday").save(bim5d_project_tmp_path)
+
+    var cmd = ""
+    saveDf.select("tmday").distinct().map(_.getAs[String]("tmday")).collect().foreach(day => {
+      cmd = cmd + s" ${bim5d_project_path}/tmday=${day} "
+    })
+    println(cmd)
+    if (cmd.length > 0) {
+      cmd = "hadoop fs  -rmr " + cmd
+      cmd !
+    }
+
+    cmd = s"hadoop fs  -cp  ${bim5d_project_tmp_path}/tmday*  ${bim5d_project_path}/"
+    cmd !
+
+
+    dayDf.unpersist()
+    saveDf.unpersist()
+
+    Config.udpateDate(batchStart, batchEnd)
+
+  }
+}
