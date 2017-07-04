@@ -2,8 +2,11 @@ package com.glodon
 
 import com.glodon.config.{Config, Constants}
 import java.sql._
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
+
 import scala.sys.process._
 
 
@@ -269,7 +272,6 @@ object ProjectFromAction {
 
   def bim5dProjectUser(baseDataDf: DataFrame) = {
     val bim5d_user_path = "/glodon/apps/bim5d_project/userproject"
-    val bim5d_project_path = "/glodon/apps/bim5d_project/project"
     val bim5d_user_tmp_path = "/glodon/apps/bim5d_project/usertmp"
 
     val df = baseDataDf.select("mday", "pcode", "dognum", "gid", "hardwareid", "fncode", "fnname", "trigertime").where("pcode in ('11036','-103000','-103001')").na.fill("N/A").repartition(200)
@@ -304,40 +306,59 @@ object ProjectFromAction {
 
     val tmdays = dayDf.select("tmday").distinct().map(_.getAs[String]("tmday")).cache().collect()
     //第一次跑应该从原始数据哪里搞。。
-    val historyDf = sqlContext.read.load(bim5d_project_path).where(s"""tmday in ('${tmdays.mkString("','")}')""").
-      withColumnRenamed("key", "h_key").
-      withColumnRenamed("tmday", "h_tmday").
-      withColumnRenamed("pcode", "h_pcode").
-      withColumnRenamed("dognum", "h_dognum").
-      withColumnRenamed("gid", "h_gid").
-      withColumnRenamed("hardwareid", "h_hardwareid").
-      withColumnRenamed("fncode", "h_fncode").
-      withColumnRenamed("fnname", "h_fnname").
-      withColumnRenamed("count", "h_count").
-      withColumnRenamed("trigertime", "h_trigertime")
+    val hadoopConfiguration = sc.hadoopConfiguration
+    val fileSystem = org.apache.hadoop.fs.FileSystem.get(hadoopConfiguration)
+    val files = fileSystem.listFiles(new Path(bim5d_user_path), false)
+    val hasNext = files.hasNext
+    var saveDf = dayDf
+    if (hasNext) {
+      val historyDf = sqlContext.read.load(bim5d_user_path).where(s"""tmday in ('${tmdays.mkString("','")}')""").
+        withColumnRenamed("key", "h_key").
+        withColumnRenamed("tmday", "h_tmday").
+        withColumnRenamed("pcode", "h_pcode").
+        withColumnRenamed("dognum", "h_dognum").
+        withColumnRenamed("gid", "h_gid").
+        withColumnRenamed("hardwareid", "h_hardwareid").
+        withColumnRenamed("fncode", "h_fncode").
+        withColumnRenamed("fnname", "h_fnname").
+        withColumnRenamed("count", "h_count").
+        withColumnRenamed("trigertime", "h_trigertime")
 
-    val saveDf = dayDf.join(historyDf, dayDf("key") === historyDf("h_key"), "full").map(x => {
-      var (key, h_key) = (x.getAs[String]("key"), x.getAs[String]("h_key"))
-      var tmday = x.getAs[String]("tmday")
-      var pcode = x.getAs[String]("pcode")
-      var dognum = x.getAs[String]("dognum")
-      var gid = x.getAs[String]("gid")
-      var hardwareid = x.getAs[String]("hardwareid")
-      var fncode = x.getAs[String]("fncode")
-      var fnname = x.getAs[String]("fnname")
-      var count = x.getAs[Int]("count")
-      var trigertime = x.getAs[String]("trigertime")
-      var h_tmday = x.getAs[Int]("h_tmday")
-      var h_pcode = x.getAs[String]("h_pcode")
-      var h_dognum = x.getAs[String]("h_dognum")
-      var h_gid = x.getAs[String]("h_gid")
-      var h_hardwareid = x.getAs[String]("h_hardwareid")
-      var h_fncode = x.getAs[String]("h_fncode")
-      var h_fnname = x.getAs[String]("h_fnname")
-      var h_count = x.getAs[Int]("h_count")
-      var h_trigertime = x.getAs[String]("h_trigertime")
-      if (key != null && h_key != null) {
-        if (trigertime < h_trigertime) {
+      saveDf = dayDf.join(historyDf, dayDf("key") === historyDf("h_key"), "full").map(x => {
+        var (key, h_key) = (x.getAs[String]("key"), x.getAs[String]("h_key"))
+        var tmday = x.getAs[String]("tmday")
+        var pcode = x.getAs[String]("pcode")
+        var dognum = x.getAs[String]("dognum")
+        var gid = x.getAs[String]("gid")
+        var hardwareid = x.getAs[String]("hardwareid")
+        var fncode = x.getAs[String]("fncode")
+        var fnname = x.getAs[String]("fnname")
+        var count = x.getAs[Int]("count")
+        var trigertime = x.getAs[String]("trigertime")
+        var h_tmday = x.getAs[Int]("h_tmday")
+        var h_pcode = x.getAs[String]("h_pcode")
+        var h_dognum = x.getAs[String]("h_dognum")
+        var h_gid = x.getAs[String]("h_gid")
+        var h_hardwareid = x.getAs[String]("h_hardwareid")
+        var h_fncode = x.getAs[String]("h_fncode")
+        var h_fnname = x.getAs[String]("h_fnname")
+        var h_count = x.getAs[Int]("h_count")
+        var h_trigertime = x.getAs[String]("h_trigertime")
+        if (key != null && h_key != null) {
+          if (trigertime < h_trigertime) {
+            tmday = h_tmday.toString()
+            pcode = h_pcode
+            dognum = h_dognum
+            gid = h_gid
+            hardwareid = h_hardwareid
+            fncode = h_fncode
+            fnname = h_fnname
+            trigertime = h_trigertime
+          }
+          count = count + h_count
+        }
+        if (key == null && h_key != null) {
+          key = h_key
           tmday = h_tmday.toString()
           pcode = h_pcode
           dognum = h_dognum
@@ -345,25 +366,13 @@ object ProjectFromAction {
           hardwareid = h_hardwareid
           fncode = h_fncode
           fnname = h_fnname
+          count = h_count
           trigertime = h_trigertime
         }
-        count = count + h_count
-      }
-      if (key == null && h_key != null) {
-        key = h_key
-        tmday = h_tmday.toString()
-        pcode = h_pcode
-        dognum = h_dognum
-        gid = h_gid
-        hardwareid = h_hardwareid
-        fncode = h_fncode
-        fnname = h_fnname
-        count = h_count
-        trigertime = h_trigertime
-      }
-      var trigertimeMday = if (tmday != null) tmday.toString() else "20850101"
-      BimUser(key, trigertimeMday, pcode, dognum, gid, hardwareid, fncode, fnname, count, trigertime)
-    }).toDF()
+        var trigertimeMday = if (tmday != null) tmday.toString() else "20850101"
+        BimUser(key, trigertimeMday, pcode, dognum, gid, hardwareid, fncode, fnname, count, trigertime)
+      }).toDF()
+    }
 
     saveDf.persist()
     saveDf.repartition(1).write.mode("overwrite").partitionBy("tmday").save(bim5d_user_tmp_path)
