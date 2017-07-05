@@ -308,7 +308,7 @@ object ProjectFromAction {
     //第一次跑应该从原始数据哪里搞。。
     val hadoopConfiguration = sc.hadoopConfiguration
     val fileSystem = org.apache.hadoop.fs.FileSystem.get(hadoopConfiguration)
-    val files = fileSystem.listFiles(new Path(bim5d_user_path), false)
+    val files = fileSystem.listFiles(new Path(bim5d_user_path), true)
     val hasNext = files.hasNext
     var saveDf = dayDf
     if (hasNext) {
