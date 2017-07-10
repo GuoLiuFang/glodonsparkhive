@@ -421,6 +421,7 @@ object ProjectFromAction {
       case "zjproject" => projectCompute(baseDataDf)
       case "zjprojectsum" => projectSum
       case "bim5dproject" => bim5dProject(baseDataDf)
+      //        按照用户主题计算
       case "bim5dprojectuser" => bim5dProjectUser(baseDataDf)
     }
     Config.udpateDate(batchStart, batchEnd)
