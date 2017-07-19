@@ -22,7 +22,7 @@ object BehavorsHandler {
   private val glodon_userlog_path = "/glodon/layer2_wide_table/glodon_userlog"
   //  private val glodon_userlog_path = "/glodon/layer2_wide_table/parquet_userlog"
   //projectParquetPath 追加线上。。
-  private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
+//  private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
   private val projectParquetPathTemp = "/glodon/apps/public/fact_project_by_product_lock_temp/"
 
   private case class Project(var pId: String, var pcode: Int, var gid: String, var dognum: String, var ver: String, var projectid: String, var prjname: String, var prjfullpath: String,
@@ -59,7 +59,7 @@ object BehavorsHandler {
   }
 
   def projectCompute(baseDataDf: DataFrame) = {
-    sqlContext.read.parquet(projectParquetPath).registerTempTable("allProject")
+    sqlContext.read.parquet(projectParquetPathTemp).registerTempTable("allProject")
 
     //projectid,prjname,prjfullpath任意一个不为空值的就算有效记录。。
     //na.fill double numeric string
@@ -106,8 +106,8 @@ object BehavorsHandler {
       .toDF()
       .registerTempTable("dayProject")
     val projectDf = sqlContext.sql("select d.* from dayProject d  left join allProject a on a.pId = d.pId where a.pId is null and d.pId is not null and d.dognum<>'N/A'")
-    projectDf.write.mode("append").parquet(projectParquetPathTemp)
-    //    projectDf.repartition($"pcode", $"mday", $"monthday").write.partitionBy("pcode", "mday", "monthday").mode("append").parquet(projectParquetPathTemp)
+//    projectDf.write.mode("append").parquet(projectParquetPathTemp)
+        projectDf.repartition($"pcode", $"mday", $"monthday").write.partitionBy("pcode", "mday", "monthday").mode("append").parquet(projectParquetPathTemp)
   }
 
 }
