@@ -68,7 +68,7 @@ object BehavorsHandler {
       .na.fill(0.0).na.fill("N/A")
       .na.replace("*", Map("" -> "N/A"))
       .map(r => {
-        var (pcode, gid, dognum, ver, projectid, prjname) = (r.getAs[String]("pcode"), r.getAs[String]("gid"), r.getAs[String]("dognum"), r.getAs[String]("ver"), r.getAs[String]("projectid"), r.getAs[String]("prjname"))
+        var (pcode, gid, dognum, ver, projectid, prjname) = (r.getAs[Int]("pcode"), r.getAs[String]("gid"), r.getAs[String]("dognum"), r.getAs[String]("ver"), r.getAs[String]("projectid"), r.getAs[String]("prjname"))
         var (prjfullpath, prjcost, prjsize, major, duration, utype) = (r.getAs[String]("prjfullpath"), r.getAs[String]("prjcost"), r.getAs[String]("prjsize"), r.getAs[String]("major"), r.getAs[String]("duration"), r.getAs[String]("utype"))
         duration = if (duration == "N/A") "0" else duration
         var (receivetime, first_open_datetime, last_close_datetime, total_duration, last_long) = (r.getAs[String]("receivetime"), r.getAs[String]("receivetime"), r.getAs[String]("receivetime"), duration, duration)
