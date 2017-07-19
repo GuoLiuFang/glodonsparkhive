@@ -25,7 +25,7 @@ object BehavorsHandler {
   private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
   private val projectParquetPathTemp = "/glodon/apps/public/fact_project_by_product_lock_temp/"
 
-  private case class Project(var pId: String, var pcode: String, var gid: String, var dognum: String, var ver: String, var projectid: String, var prjname: String, var prjfullpath: String,
+  private case class Project(var pId: String, var pcode: Int, var gid: String, var dognum: String, var ver: String, var projectid: String, var prjname: String, var prjfullpath: String,
                              var prjcost: String, var prjsize: String, var major: String, var duration: String, var utype: String, var receivetime: String, var first_open_datetime: String,
                              var last_close_datetime: String, var total_duration: String, var last_long: String)
 
