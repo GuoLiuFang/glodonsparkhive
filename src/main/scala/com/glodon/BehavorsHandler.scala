@@ -2,6 +2,7 @@ package com.glodon
 
 
 import org.apache.commons.codec.digest.DigestUtils
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.{DataFrame, SQLContext}
@@ -22,7 +23,7 @@ object BehavorsHandler {
   private val glodon_userlog_path = "/glodon/layer2_wide_table/glodon_userlog"
   //  private val glodon_userlog_path = "/glodon/layer2_wide_table/parquet_userlog"
   //projectParquetPath 追加线上。。
-//  private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
+  //  private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
   private val projectParquetPathTemp = "/glodon/apps/public/fact_project_by_product_lock_temp/"
 
   private case class Project(var pId: String, var pcode: Int, var gid: String, var dognum: String, var ver: String, var projectid: String, var prjname: String, var prjfullpath: String,
@@ -63,7 +64,7 @@ object BehavorsHandler {
 
     //projectid,prjname,prjfullpath任意一个不为空值的就算有效记录。。
     //na.fill double numeric string
-    baseDataDf.filter("(projectid <> 'N/A') or (prjname <> 'N/A') or (prjfullpath<>'N/A')")
+    val dayBaseDF = baseDataDf.filter("(projectid <> 'N/A') or (prjname <> 'N/A') or (prjfullpath<>'N/A')")
       .select("pcode", "gid", "dognum", "ver", "projectid", "prjname", "prjfullpath", "prjcost", "prjsize", "major", "duration", "utype", "receivetime")
       .na.fill(0.0).na.fill("N/A")
       .na.replace("*", Map("" -> "N/A"))
@@ -104,10 +105,16 @@ object BehavorsHandler {
       })
       .map(r => r._2)
       .toDF()
-      .registerTempTable("dayProject")
-    val projectDf = sqlContext.sql("select d.* from dayProject d  left join allProject a on a.pId = d.pId where a.pId is null and d.pId is not null and d.dognum<>'N/A'")
-//    projectDf.write.mode("append").parquet(projectParquetPathTemp)
-        projectDf.repartition($"pcode").write.partitionBy("pcode").mode("append").parquet(projectParquetPathTemp)
+    val hadoopConfiguration = sc.hadoopConfiguration
+    val fileSystem = org.apache.hadoop.fs.FileSystem.get(hadoopConfiguration)
+    val files = fileSystem.listFiles(new Path(projectParquetPathTemp), true)
+    val hasNext = files.hasNext
+    var projectDf = dayBaseDF
+    if (hasNext) {
+      dayBaseDF.registerTempTable("dayProject")
+      projectDf = sqlContext.sql("select d.* from dayProject d  left join allProject a on a.pId = d.pId where a.pId is null and d.pId is not null and d.dognum<>'N/A'")
+    }
+    projectDf.repartition($"pcode").write.partitionBy("pcode").mode("append").parquet(projectParquetPathTemp)
   }
 
 }
