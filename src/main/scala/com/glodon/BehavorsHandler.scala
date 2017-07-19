@@ -107,7 +107,7 @@ object BehavorsHandler {
       .registerTempTable("dayProject")
     val projectDf = sqlContext.sql("select d.* from dayProject d  left join allProject a on a.pId = d.pId where a.pId is null and d.pId is not null and d.dognum<>'N/A'")
 //    projectDf.write.mode("append").parquet(projectParquetPathTemp)
-        projectDf.repartition($"pcode", $"mday", $"monthday").write.partitionBy("pcode", "mday", "monthday").mode("append").parquet(projectParquetPathTemp)
+        projectDf.repartition($"pcode").write.partitionBy("pcode").mode("append").parquet(projectParquetPathTemp)
   }
 
 }
