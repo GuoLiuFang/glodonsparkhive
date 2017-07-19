@@ -19,7 +19,8 @@ object BehavorsHandler {
   import sqlContext.implicits._
 
   //parquet_userlog_path原始的行为日志
-  private val parquet_userlog_path = "/glodon/layer2_wide_table/parquet_userlog"
+  private val glodon_userlog_path = "/glodon/layer2_wide_table/glodon_userlog"
+  //  private val glodon_userlog_path = "/glodon/layer2_wide_table/parquet_userlog"
   //projectParquetPath 追加线上。。
   private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
   private val projectParquetPathTemp = "/glodon/apps/public/fact_project_by_product_lock_temp/"
@@ -45,11 +46,11 @@ object BehavorsHandler {
       i += 1
     }
     //默认是 pcodeList=all
-    var baseDataDf = sqlContext.read.parquet(parquet_userlog_path).filter(s"mday >= '${batchStart}' and mday <= '${batchEnd}'")
+    var baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"mday >= '${batchStart}' and mday <= '${batchEnd}'")
     if (pcodeList.size > 0) {
       val plist = pcodeList.mkString("'", "','", "'")
       print(s"plist")
-      baseDataDf = sqlContext.read.parquet(parquet_userlog_path).filter(s"pcode in (${plist}) and mday >= '${batchStart}' and mday <= '${batchEnd}'")
+      baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"pcode in (${plist}) and mday >= '${batchStart}' and mday <= '${batchEnd}'")
     }
     projectCompute(baseDataDf)
     //    projectSum
@@ -105,7 +106,8 @@ object BehavorsHandler {
       .toDF()
       .registerTempTable("dayProject")
     val projectDf = sqlContext.sql("select d.* from dayProject d  left join allProject a on a.pId = d.pId where a.pId is null and d.pId is not null and d.dognum<>'N/A'")
-    projectDf.repartition($"pcode", $"mday", $"monthday").write.partitionBy("pcode", "mday", "monthday").mode("append").parquet(projectParquetPathTemp)
+    projectDf.write.mode("append").parquet(projectParquetPathTemp)
+    //    projectDf.repartition($"pcode", $"mday", $"monthday").write.partitionBy("pcode", "mday", "monthday").mode("append").parquet(projectParquetPathTemp)
   }
 
 }
