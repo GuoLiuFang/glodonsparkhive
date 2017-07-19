@@ -60,8 +60,6 @@ object BehavorsHandler {
   }
 
   def projectCompute(baseDataDf: DataFrame) = {
-    sqlContext.read.parquet(projectParquetPathTemp).registerTempTable("allProject")
-
     //projectid,prjname,prjfullpath任意一个不为空值的就算有效记录。。
     //na.fill double numeric string
     val dayBaseDF = baseDataDf.filter("(projectid <> 'N/A') or (prjname <> 'N/A') or (prjfullpath<>'N/A')")
@@ -111,6 +109,7 @@ object BehavorsHandler {
     val hasNext = files.hasNext
     var projectDf = dayBaseDF
     if (hasNext) {
+      sqlContext.read.parquet(projectParquetPathTemp).registerTempTable("allProject")
       dayBaseDF.registerTempTable("dayProject")
       projectDf = sqlContext.sql("select d.* from dayProject d  left join allProject a on a.pId = d.pId where a.pId is null and d.pId is not null and d.dognum<>'N/A'")
     }
