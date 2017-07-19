@@ -48,7 +48,7 @@ object BehavorsHandler {
     //默认是 pcodeList=all
     var baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"mday >= '${batchStart}' and mday <= '${batchEnd}'")
     if (pcodeList.size > 0) {
-      val plist = pcodeList.mkString("'", "','", "'")
+      val plist = pcodeList.mkString(",")
       print(s"plist")
       baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"pcode in (${plist}) and mday >= '${batchStart}' and mday <= '${batchEnd}'")
     }
@@ -76,7 +76,7 @@ object BehavorsHandler {
         if (prjname == "N/A" && prjfullpath != "N/A") {
           prjname = if (prjfullpath.indexOf("\\") > 0) prjfullpath.split("\\\\").last else prjfullpath
         }
-        var key = pcode + dognum + projectid + prjname
+        var key = "" + pcode + dognum + projectid + prjname
         key = DigestUtils.md5Hex(key)
         (key, Project(key, pcode, gid, dognum, ver, projectid, prjname, prjfullpath, prjcost, prjsize, major, duration, utype, receivetime, first_open_datetime, last_close_datetime, total_duration, last_long))
       })
@@ -84,7 +84,7 @@ object BehavorsHandler {
         v1.first_open_datetime = if (v1.first_open_datetime < v2.first_open_datetime) v1.first_open_datetime else v2.first_open_datetime
         v1.last_close_datetime = if (v1.last_close_datetime > v2.last_close_datetime) v1.last_close_datetime else v2.last_close_datetime
         if (v1.receivetime < v2.receivetime) {
-          if (v2.pcode != "N/A") v1.pcode = v2.pcode
+          if (v2.pcode != 0.0) v1.pcode = v2.pcode
           if (v2.gid != "N/A") v1.gid = v2.gid
           if (v2.dognum != "N/A") v1.dognum = v2.dognum
           if (v2.ver != "N/A") v1.ver = v2.ver
