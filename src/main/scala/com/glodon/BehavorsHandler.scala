@@ -130,14 +130,11 @@ object BehavorsHandler {
     val connection: Connection = DriverManager.getConnection(Constants.BULK_JDBC_URL, "webuser", "123.c0m")
     connection.setAutoCommit(false)
     val statement = connection.createStatement()
-    val PRESQL = "insert into batch.fact_project_sum_by_product_lock_b(product_id,ver,lock_number,project_cnt) values (?,?,?,?)"
-//    val PRESQL = "insert into batch.fact_project_sum_by_product_lock_a(product_id,ver,lock_number,project_cnt) values (?,?,?,?)"
-    val prepareStatement = connection.prepareStatement(PRESQL)
     //设置还原点
     val savepoint = connection.setSavepoint("savepoint1")
     try {
       val SQL = "TRUNCATE batch.fact_project_sum_by_product_lock_b"
-//      val SQL = "TRUNCATE batch.fact_project_sum_by_product_lock_a"
+      //      val SQL = "TRUNCATE batch.fact_project_sum_by_product_lock_a"
       statement.addBatch(SQL)
       statement.executeBatch()
       //如果没有问题就提交到数据库
@@ -153,9 +150,13 @@ object BehavorsHandler {
     sqlContext.sql("select pcode as product_id,ver as ver, dognum as lock_number, count(1) as project_cnt from projectSum   GROUP BY pcode , ver, dognum")
       .coalesce(20)
       .foreachPartition((iterator: Iterator[Row]) => {
+        val connection: Connection = DriverManager.getConnection(Constants.BULK_JDBC_URL, "webuser", "123.c0m")
+        connection.setAutoCommit(false)
+        val PRESQL = "insert into batch.fact_project_sum_by_product_lock_b(product_id,ver,lock_number,project_cnt) values (?,?,?,?)"
+        //    val PRESQL = "insert into batch.fact_project_sum_by_product_lock_a(product_id,ver,lock_number,project_cnt) values (?,?,?,?)"
+        val prepareStatement = connection.prepareStatement(PRESQL)
         //首先清理之前的批处理工作
-        prepareStatement.clearBatch()
-        var savepoint1 = connection.setSavepoint()
+        val savepoint1 = connection.setSavepoint()
         iterator.foreach((row) => {
           prepareStatement.setString(1, row.getAs[String]("product_id"))
           prepareStatement.setString(2, row.getAs[String]("ver"))
