@@ -238,6 +238,7 @@ object BehavorsHandler {
       })
       .map(x => x._2)
       .toDF()
+      .coalesce(200)
     val tmdays = dayDf.select("tmday").distinct().map(_.getAs[String]("tmday")).cache().collect()
     //存在的话，读取信息，删除目录及下面的东西。。
     val hadoopConfiguration = sc.hadoopConfiguration
@@ -307,6 +308,7 @@ object BehavorsHandler {
           BimProject(key, trigertimeMday, pcode, projectid, prjname, dognum, gid, hardwareid, fncode, fnname, count, trigertime)
         })
         .toDF()
+        .coalesce(200)
       //信息读取,并使用完成后，清空目录下的所有文件
       fileSystem.delete(path, true)
     }
