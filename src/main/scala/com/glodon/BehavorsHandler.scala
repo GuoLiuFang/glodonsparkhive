@@ -35,33 +35,38 @@ object BehavorsHandler {
 
   def main(args: Array[String]): Unit = {
     var pcodeList = new ListBuffer[String]()
-    if (args.length < 2) {
+    if (args.length < 3) {
       println(
         """---------------------------------------------------------------------------------
-           Usage: batchStart batchEnd [pcodeList]
-          example1: 20170101 20170704
-          example1: 20170101 20170704 11036 -103000 -103001
+           Usage: batchStart batchEnd jobtype [pcodeList]
+           bim5dProject: batchStart batchEnd bim5dproject 11036 -103000 -103001
+          example1: 20170101 20170704 default
+          example1: 20170101 20170704 default 11036 -103000 -103001
         |---------------------------------------------------------------------------------""")
       System.exit(-1);
     }
     val batchStart = args(0).toInt
     val batchEnd = args(1).toInt
-    var i = 2
+    val run = args(2).toString
+    var i = 3
     while (i < args.length) {
       pcodeList += args(i)
       i += 1
     }
-    //默认是 pcodeList=all
+    //默认是 pcodeList=default
     var baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"mday >= '${batchStart}' and mday <= '${batchEnd}'")
     if (pcodeList.size > 0) {
       val plist = pcodeList.mkString(",")
-      print(s"${plist}")
+      print(s"指定的产品列表为：${plist}")
       baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"pcode in (${plist}) and mday >= '${batchStart}' and mday <= '${batchEnd}'")
     }
-    projectCompute(baseDataDf)
-    projectSum
-    //    bim5dProject(baseDataDf)
-    //    bim5dProjectUser(baseDataDf)
+    run match {
+      case "default" => {
+        projectCompute(baseDataDf)
+        projectSum
+      }
+      case "bim5dproject" => bim5dProject(baseDataDf)
+    }
   }
 
   def projectCompute(baseDataDf: DataFrame) = {
@@ -190,6 +195,10 @@ object BehavorsHandler {
 
       })
     //最后收拾资源释放问题
+
+  }
+
+  def bim5dProject(baseDataDf: DataFrame) = {
 
   }
 }
