@@ -165,7 +165,7 @@ object BehavorsHandler {
         //首先清理之前的批处理工作
         val savepoint1 = connection.setSavepoint()
         iterator.foreach((row) => {
-          prepareStatement.setString(1, row.getAs[String]("product_id"))
+          prepareStatement.setString(1, "" + row.getAs[Int]("product_id"))
           prepareStatement.setString(2, row.getAs[String]("ver"))
           prepareStatement.setString(3, row.getAs[String]("lock_number"))
           prepareStatement.setInt(4, row.getAs[Long]("project_cnt").toInt)
