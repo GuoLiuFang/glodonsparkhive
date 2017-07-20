@@ -1,11 +1,14 @@
 package com.glodon
 
 
+import java.sql.{Connection, DriverManager}
+
+import com.glodon.config.Constants
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 import scala.collection.mutable.ListBuffer
 
@@ -56,7 +59,7 @@ object BehavorsHandler {
       baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"pcode in (${plist}) and mday >= '${batchStart}' and mday <= '${batchEnd}'")
     }
     projectCompute(baseDataDf)
-    //    projectSum
+    projectSum
     //    bim5dProject(baseDataDf)
     //    bim5dProjectUser(baseDataDf)
   }
@@ -122,4 +125,62 @@ object BehavorsHandler {
     projectDf.repartition($"pcode").write.partitionBy("pcode").mode("append").parquet(projectParquetPathNew)
   }
 
+  def projectSum = {
+
+    val connection: Connection = DriverManager.getConnection(Constants.BULK_JDBC_URL, "webuser", "123.c0m")
+    connection.setAutoCommit(false)
+    val statement = connection.createStatement()
+    val PRESQL = "insert into batch.fact_project_sum_by_product_lock_a(product_id,ver,lock_number,project_cnt) values (?,?,?,?)"
+    val prepareStatement = connection.prepareStatement(PRESQL)
+    //设置还原点
+    val savepoint = connection.setSavepoint("savepoint1")
+    try {
+      val SQL = "TRUNCATE batch.fact_project_sum_by_product_lock_a"
+      statement.addBatch(SQL)
+      statement.executeBatch()
+      //如果没有问题就提交到数据库
+      connection.commit()
+    } catch {
+      //如果出问题，就回滚到出事状态
+      case e: Exception => {
+        e.printStackTrace()
+        connection.rollback(savepoint)
+      }
+    }
+    sqlContext.read.parquet(projectParquetPathNew).select("pcode", "ver", "dognum").registerTempTable("projectSum")
+    sqlContext.sql("select pcode as product_id,ver as ver, dognum as lock_number, count(1) as project_cnt from projectSum   GROUP BY pcode , ver, dognum")
+      .coalesce(20)
+      .foreachPartition((iterator: Iterator[Row]) => {
+        //首先清理之前的批处理工作
+        prepareStatement.clearBatch()
+        var savepoint1 = connection.setSavepoint()
+        iterator.foreach((row) => {
+          prepareStatement.setString(1, row.getAs[String]("product_id"))
+          prepareStatement.setString(2, row.getAs[String]("ver"))
+          prepareStatement.setString(3, row.getAs[String]("lock_number"))
+          prepareStatement.setInt(4, row.getAs[Long]("project_cnt").toInt)
+          prepareStatement.addBatch()
+        })
+        try {
+          prepareStatement.executeBatch()
+          connection.commit()
+        } catch {
+          case e: Exception => {
+            e.printStackTrace()
+            connection.rollback(savepoint1)
+          }
+        }
+
+      })
+    //最后收拾资源释放问题
+    if (prepareStatement != null) {
+      prepareStatement.close()
+    }
+    if (statement != null) {
+      statement.close()
+    }
+    if (connection != null) {
+      connection.close()
+    }
+  }
 }
