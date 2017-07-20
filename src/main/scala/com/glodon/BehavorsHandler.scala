@@ -145,6 +145,13 @@ object BehavorsHandler {
         e.printStackTrace()
         connection.rollback(savepoint)
       }
+    } finally {
+      if (statement != null) {
+        statement.close()
+      }
+      if (connection != null) {
+        connection.close()
+      }
     }
     sqlContext.read.parquet(projectParquetPathNew).select("pcode", "ver", "dognum").registerTempTable("projectSum")
     sqlContext.sql("select pcode as product_id,ver as ver, dognum as lock_number, count(1) as project_cnt from projectSum   GROUP BY pcode , ver, dognum")
@@ -172,18 +179,17 @@ object BehavorsHandler {
             e.printStackTrace()
             connection.rollback(savepoint1)
           }
+        } finally {
+          if (prepareStatement != null) {
+            prepareStatement.close()
+          }
+          if (connection != null) {
+            connection.close()
+          }
         }
 
       })
     //最后收拾资源释放问题
-    if (prepareStatement != null) {
-      prepareStatement.close()
-    }
-    if (statement != null) {
-      statement.close()
-    }
-    if (connection != null) {
-      connection.close()
-    }
+
   }
 }

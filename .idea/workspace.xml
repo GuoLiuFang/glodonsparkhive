@@ -27,8 +27,8 @@
       <file leaf-file-name="BehavorsHandler.scala" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/main/scala/com/glodon/BehavorsHandler.scala">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="314">
-              <caret line="175" column="0" lean-forward="true" selection-start-line="0" selection-start-column="0" selection-end-line="189" selection-end-column="0" />
+            <state relative-caret-position="266">
+              <caret line="100" column="61" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="195" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -718,7 +718,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="27565000" />
+    <option name="totallyTimeSpent" value="27864000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="13" y="23" width="1346" height="701" extended-state="0" />
@@ -1170,8 +1170,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/src/main/scala/com/glodon/BehavorsHandler.scala">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="314">
-          <caret line="175" column="0" lean-forward="true" selection-start-line="0" selection-start-column="0" selection-end-line="189" selection-end-column="0" />
+        <state relative-caret-position="266">
+          <caret line="100" column="61" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="195" selection-end-column="0" />
           <folding />
         </state>
       </provider>
