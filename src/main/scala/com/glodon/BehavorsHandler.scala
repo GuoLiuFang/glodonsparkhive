@@ -29,9 +29,13 @@ object BehavorsHandler {
   //  private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
   private val projectParquetPathNew = "/glodon/apps/public/fact_project_by_product_lock_new/"
 
+  private val bim5d_project_path_new = "/glodon/apps/bim5d_project/project_new"
+
   private case class Project(var pId: String, var pcode: Int, var gid: String, var dognum: String, var ver: String, var projectid: String, var prjname: String, var prjfullpath: String,
                              var prjcost: String, var prjsize: String, var major: String, var duration: String, var utype: String, var receivetime: String, var first_open_datetime: String,
                              var last_close_datetime: String, var total_duration: String, var last_long: String)
+
+  private case class BimProject(var key: String, tmday: String, pcode: Int, projectid: String, var prjname: String, dognum: String, gid: String, hardwareid: String, fncode: String, var fnname: String, var count: Int = 0, trigertime: String)
 
   def main(args: Array[String]): Unit = {
     var pcodeList = new ListBuffer[String]()
@@ -199,6 +203,114 @@ object BehavorsHandler {
   }
 
   def bim5dProject(baseDataDf: DataFrame) = {
+    val df = baseDataDf.select("mday", "pcode", "projectid", "prjname", "dognum", "gid", "hardwareid", "fncode", "fnname", "trigertime")
+      .na.fill(0.0).na.fill("N/A")
+    val dayDf = df.map((x) => {
+      val mday = x.getAs[Int]("mday")
+      val pcode = x.getAs[Int]("pcode")
+      val projectid = x.getAs[String]("projectid")
+      val prjname = x.getAs[String]("prjname")
+      val dognum = x.getAs[String]("dognum")
+      val gid = x.getAs[String]("gid")
+      val hardwareid = x.getAs[String]("hardwareid")
+      val fncode = x.getAs[Int]("fncode").toString()
+      val fnname = x.getAs[String]("fnname")
+      var trigertime = x.getAs[String]("trigertime")
+      var tmday = "20850101"
+      if (trigertime != null && trigertime.length() > 0) {
+        trigertime = trigertime.replaceAll("年", "").replaceAll("月", "").replaceAll("日", "")
+        tmday = trigertime.substring(0, 4) + trigertime.substring(5, 7) + trigertime.substring(8, 10)
+      }
+      var key = tmday + pcode + projectid + dognum + gid + hardwareid + fncode
+      key = DigestUtils.md5Hex(key)
+      (key, BimProject(key, tmday, pcode, projectid, prjname, dognum, gid, hardwareid, fncode, fnname, 1, trigertime))
+    })
+      .reduceByKey((r1, r2) => {
+        if (r1.trigertime < r2.trigertime) {
+          r1.prjname = if (r2.prjname != "N/A") r2.prjname else r1.prjname
+          r1.fnname = if (r2.fnname != "N/A") r2.fnname else r1.fnname
+        } else {
+          r1.prjname = if (r1.prjname == "N/A") r2.prjname else r1.prjname
+          r1.fnname = if (r1.fnname == "N/A") r2.fnname else r1.fnname
+        }
+        r1.count = r1.count + r2.count
+        r1
+      })
+      .map(x => x._2)
+      .toDF()
+    val tmdays = dayDf.select("tmday").distinct().map(_.getAs[String]("tmday")).cache().collect()
+    //存在的话，读取信息，删除目录及下面的东西。。
+    val hadoopConfiguration = sc.hadoopConfiguration
+    val fileSystem = org.apache.hadoop.fs.FileSystem.get(hadoopConfiguration)
+    val path = new Path(bim5d_project_path_new)
+    if (!fileSystem.exists(path)) {
+      fileSystem.mkdirs(path)
+    }
+    val files = fileSystem.listFiles(path, true)
+    val hasNext = files.hasNext
+    var saveDf = dayDf
+    if (hasNext) {
+      val historyDf = sqlContext.read.parquet(bim5d_project_path_new).filter(s"""tmday in ('${tmdays.mkString("','")}')""").
+        withColumnRenamed("key", "h_key").
+        withColumnRenamed("tmday", "h_tmday").
+        withColumnRenamed("pcode", "h_pcode").
+        withColumnRenamed("projectid", "h_projectid").
+        withColumnRenamed("prjname", "h_prjname").
+        withColumnRenamed("dognum", "h_dognum").
+        withColumnRenamed("gid", "h_gid").
+        withColumnRenamed("hardwareid", "h_hardwareid").
+        withColumnRenamed("fncode", "h_fncode").
+        withColumnRenamed("fnname", "h_fnname").
+        withColumnRenamed("count", "h_count").
+        withColumnRenamed("trigertime", "h_trigertime")
+
+      saveDf = dayDf
+        .join(historyDf, dayDf("key") === historyDf("h_key"), "outer")
+        .map(x => {
+          var (key, h_key) = (x.getAs[String]("key"), x.getAs[String]("h_key"))
+          var tmday = x.getAs[String]("tmday")
+          var pcode = x.getAs[Int]("pcode")
+          var projectid = x.getAs[String]("projectid")
+          var prjname = x.getAs[String]("prjname")
+          var dognum = x.getAs[String]("dognum")
+          var gid = x.getAs[String]("gid")
+          var hardwareid = x.getAs[String]("hardwareid")
+          var fncode = x.getAs[String]("fncode")
+          var fnname = x.getAs[String]("fnname")
+          var count = x.getAs[Int]("count")
+          var trigertime = x.getAs[String]("trigertime")
+          var h_tmday = x.getAs[Int]("h_tmday")
+          var h_pcode = x.getAs[Int]("h_pcode")
+          var h_projectid = x.getAs[String]("h_projectid")
+          var h_prjname = x.getAs[String]("h_prjname")
+          var h_dognum = x.getAs[String]("h_dognum")
+          var h_gid = x.getAs[String]("h_gid")
+          var h_hardwareid = x.getAs[String]("h_hardwareid")
+          var h_fncode = x.getAs[String]("h_fncode")
+          var h_fnname = x.getAs[String]("h_fnname")
+          var h_count = x.getAs[Int]("h_count")
+          var h_trigertime = x.getAs[String]("h_trigertime")
+          if (trigertime < h_trigertime) {
+            tmday = h_tmday.toString()
+            pcode = h_pcode
+            projectid = h_projectid
+            prjname = h_prjname
+            dognum = h_dognum
+            gid = h_gid
+            hardwareid = h_hardwareid
+            fncode = h_fncode
+            fnname = h_fnname
+            trigertime = h_trigertime
+          }
+          count = count + h_count
+          var trigertimeMday = if (tmday != null) tmday.toString() else "20850101"
+          BimProject(key, trigertimeMday, pcode, projectid, prjname, dognum, gid, hardwareid, fncode, fnname, count, trigertime)
+        })
+        .toDF()
+      //信息读取,并使用完成后，清空目录下的所有文件
+      fileSystem.delete(path, true)
+    }
+    saveDf.repartition($"pcode", $"tmday").write.partitionBy("pcode", "tmday").mode("overwrite").parquet(bim5d_project_path_new)
 
   }
 }
