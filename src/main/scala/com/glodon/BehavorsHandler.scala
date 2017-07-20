@@ -24,7 +24,7 @@ object BehavorsHandler {
   //  private val glodon_userlog_path = "/glodon/layer2_wide_table/parquet_userlog"
   //projectParquetPath 追加线上。。
   //  private val projectParquetPath = "/glodon/apps/public/fact_project_by_product_lock/"
-  private val projectParquetPathTemp = "/glodon/apps/public/fact_project_by_product_lock_temp/"
+  private val projectParquetPathNew = "/glodon/apps/public/fact_project_by_product_lock_new/"
 
   private case class Project(var pId: String, var pcode: Int, var gid: String, var dognum: String, var ver: String, var projectid: String, var prjname: String, var prjfullpath: String,
                              var prjcost: String, var prjsize: String, var major: String, var duration: String, var utype: String, var receivetime: String, var first_open_datetime: String,
@@ -34,9 +34,11 @@ object BehavorsHandler {
     var pcodeList = new ListBuffer[String]()
     if (args.length < 2) {
       println(
-        """Usage: batchStart batchEnd [pcodeList]
+        """---------------------------------------------------------------------------------
+           Usage: batchStart batchEnd [pcodeList]
           example1: 20170101 20170704
-          example1: 20170101 20170704 11036 -103000 -103001""")
+          example1: 20170101 20170704 11036 -103000 -103001
+        |---------------------------------------------------------------------------------""")
       System.exit(-1);
     }
     val batchStart = args(0).toInt
@@ -50,7 +52,7 @@ object BehavorsHandler {
     var baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"mday >= '${batchStart}' and mday <= '${batchEnd}'")
     if (pcodeList.size > 0) {
       val plist = pcodeList.mkString(",")
-      print(s"plist")
+      print(s"${plist}")
       baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"pcode in (${plist}) and mday >= '${batchStart}' and mday <= '${batchEnd}'")
     }
     projectCompute(baseDataDf)
@@ -105,15 +107,19 @@ object BehavorsHandler {
       .toDF()
     val hadoopConfiguration = sc.hadoopConfiguration
     val fileSystem = org.apache.hadoop.fs.FileSystem.get(hadoopConfiguration)
-    val files = fileSystem.listFiles(new Path(projectParquetPathTemp), true)
+    val path = new Path(projectParquetPathNew)
+    if (!fileSystem.exists(path)) {
+      fileSystem.mkdirs(path)
+    }
+    val files = fileSystem.listFiles(path, true)
     val hasNext = files.hasNext
     var projectDf = dayBaseDF
     if (hasNext) {
-      sqlContext.read.parquet(projectParquetPathTemp).registerTempTable("allProject")
+      sqlContext.read.parquet(projectParquetPathNew).registerTempTable("allProject")
       dayBaseDF.registerTempTable("dayProject")
       projectDf = sqlContext.sql("select d.* from dayProject d  left join allProject a on a.pId = d.pId where a.pId is null and d.pId is not null and d.dognum<>'N/A'")
     }
-    projectDf.repartition($"pcode").write.partitionBy("pcode").mode("append").parquet(projectParquetPathTemp)
+    projectDf.repartition($"pcode").write.partitionBy("pcode").mode("append").parquet(projectParquetPathNew)
   }
 
 }
