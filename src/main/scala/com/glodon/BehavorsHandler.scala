@@ -37,17 +37,21 @@ object BehavorsHandler {
 
   private case class BimProject(var key: String, tmday: String, pcode: Int, projectid: String, var prjname: String, dognum: String, gid: String, hardwareid: String, fncode: String, var fnname: String, var count: Int = 0, trigertime: String)
 
-  def main(args: Array[String]): Unit = {
-    var pcodeList = new ListBuffer[String]()
-    if (args.length < 3) {
-      println(
-        """---------------------------------------------------------------------------------
+  def printUsage(): Unit = {
+    println(
+      """---------------------------------------------------------------------------------
            Usage: batchStart batchEnd jobtype [pcodeList]
            bim5dProject: batchStart batchEnd bim5dproject 11036 -103000 -103001
           example1: 20170101 20170704 default
           example1: 20170101 20170704 default 11036 -103000 -103001
-        |---------------------------------------------------------------------------------""")
-      System.exit(-1);
+        ---------------------------------------------------------------------------------""")
+    System.exit(-1);
+  }
+
+  def main(args: Array[String]): Unit = {
+    var pcodeList = new ListBuffer[String]()
+    if (args.length < 3) {
+      printUsage
     }
     val batchStart = args(0).toInt
     val batchEnd = args(1).toInt
@@ -61,8 +65,8 @@ object BehavorsHandler {
     var baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"mday >= '${batchStart}' and mday <= '${batchEnd}'")
     if (pcodeList.size > 0) {
       val plist = pcodeList.mkString(",")
-      print(s"指定的产品列表为：${plist}")
-      baseDataDf = sqlContext.read.parquet(glodon_userlog_path).filter(s"pcode in (${plist}) and mday >= '${batchStart}' and mday <= '${batchEnd}'")
+      println(s"指定的产品列表为：${plist}")
+      baseDataDf = baseDataDf.filter(s"pcode in (${plist})")
     }
     run match {
       case "default" => {
@@ -70,6 +74,9 @@ object BehavorsHandler {
         projectSum
       }
       case "bim5dproject" => bim5dProject(baseDataDf)
+      case _ => {
+        printUsage()
+      }
     }
   }
 
