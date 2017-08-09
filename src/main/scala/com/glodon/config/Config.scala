@@ -46,7 +46,7 @@ object Config {
   def initParam: List[TaskConifg] = {
     val sql =
       """
-    select * from sys_task_config
+    select * from sys_task_config_b
     where  (id = 'common' or id ='project-from-action')
     and  project='io_batch' """
     println(sql)
@@ -69,9 +69,9 @@ object Config {
     conn.setAutoCommit(false)
     lazy val ps : Statement = conn.createStatement()
     try{
-      var sql = s"update sys_task_config set param_value='${start}' where id ='project-from-action' and param_key='start_date' and project='io_batch' "
+      var sql = s"update sys_task_config_b set param_value='${start}' where id ='project-from-action' and param_key='start_date' and project='io_batch' "
       ps.addBatch(sql)
-      sql = s"update sys_task_config set param_value='${end}' where id ='project-from-action' and param_key='end_date' and project='io_batch' "
+      sql = s"update sys_task_config_b set param_value='${end}' where id ='project-from-action' and param_key='end_date' and project='io_batch' "
       ps.addBatch(sql)
       ps.executeBatch()
       conn.commit()

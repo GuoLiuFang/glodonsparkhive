@@ -3,7 +3,7 @@ package com.glodon
 
 import java.sql.{Connection, DriverManager}
 
-import com.glodon.config.Constants
+import com.glodon.config.{Config, Constants}
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -53,8 +53,10 @@ object BehavorsHandler {
     if (args.length < 3) {
       printUsage
     }
-    val batchStart = args(0).toInt
-    val batchEnd = args(1).toInt
+    var batchStart = args(0).toInt
+    var batchEnd = args(1).toInt
+    batchStart = Config.cf.endDate
+    batchEnd = Config.cf.stopMonthDay
     val run = args(2).toString
     var i = 3
     while (i < args.length) {
@@ -78,6 +80,7 @@ object BehavorsHandler {
         printUsage()
       }
     }
+    Config.udpateDate(batchStart, batchEnd)
   }
 
   def projectCompute(baseDataDf: DataFrame) = {
@@ -317,7 +320,7 @@ object BehavorsHandler {
         .toDF()
         .coalesce(200)
       //信息读取,并使用完成后，清空目录下的所有文件
-//      fileSystem.delete(path, true)
+      //      fileSystem.delete(path, true)
     }
     saveDf.repartition($"pcode", $"tmday").write.partitionBy("pcode", "tmday").mode("overwrite").parquet(bim5d_project_path_new)
 
