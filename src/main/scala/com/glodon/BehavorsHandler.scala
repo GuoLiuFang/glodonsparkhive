@@ -317,7 +317,7 @@ object BehavorsHandler {
         .toDF()
         .coalesce(200)
       //信息读取,并使用完成后，清空目录下的所有文件
-      fileSystem.delete(path, true)
+//      fileSystem.delete(path, true)
     }
     saveDf.repartition($"pcode", $"tmday").write.partitionBy("pcode", "tmday").mode("overwrite").parquet(bim5d_project_path_new)
 
